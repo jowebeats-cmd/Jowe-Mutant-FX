@@ -76,7 +76,50 @@ void PluginProcessor::processBlock(
 juce::AudioProcessorEditor*
 PluginProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor(*this);
+    class TestEditor final : public juce::AudioProcessorEditor
+    {
+    public:
+        explicit TestEditor(juce::AudioProcessor& processor)
+            : juce::AudioProcessorEditor(processor)
+        {
+            setSize(600, 350);
+        }
+
+        void paint(juce::Graphics& g) override
+        {
+            g.fillAll(juce::Colour(0xff10121a));
+
+            g.setColour(juce::Colours::orangered);
+            g.setFont(32.0f);
+
+            g.drawFittedText(
+                "JOWE MUTANT FX",
+                20, 40, 560, 60,
+                juce::Justification::centred, 1
+            );
+
+            g.setColour(juce::Colours::cyan);
+            g.setFont(20.0f);
+
+            g.drawFittedText(
+                "GLITCH ENGINE - V0.1",
+                20, 130, 560, 40,
+                juce::Justification::centred, 1
+            );
+
+            g.setColour(juce::Colours::white);
+            g.setFont(16.0f);
+
+            g.drawFittedText(
+                "FIRST AUDIO TEST",
+                20, 210, 560, 40,
+                juce::Justification::centred, 1
+            );
+        }
+    };
+
+    return new TestEditor(*this);
+}
 }
 
 void PluginProcessor::getStateInformation(
