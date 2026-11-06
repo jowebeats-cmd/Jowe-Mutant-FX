@@ -120,7 +120,7 @@ PluginProcessor::createEditor()
 
     return new TestEditor(*this);
 }
-}
+
 
 void PluginProcessor::getStateInformation(
     juce::MemoryBlock& destData)
