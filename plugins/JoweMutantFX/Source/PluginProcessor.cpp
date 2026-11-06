@@ -67,8 +67,12 @@ void PluginProcessor::processBlock(
 
         for (int sample = 0; sample < numSamples; ++sample)
         {
-            samples[sample] =
-                engine.processSample(samples[sample]);
+            const float dry = samples[sample];
+
+const float wet = engine.processSample(dry);
+
+samples[sample] =
+    (dry * 0.70f) + (wet * 0.30f);
         }
     }
 }
