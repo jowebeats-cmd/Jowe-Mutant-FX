@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 jobs:
   windows-vst3:
-    runs-on: windows-latest
+   .github/workflows/build.yml.  
     steps:
       - uses: actions/checkout@v4
       - uses: lukka/get-cmake@latest
