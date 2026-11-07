@@ -1,152 +1,23 @@
 cmake_minimum_required(VERSION 3.22)
-# APC framework version: canonical source is package.json ("version").
-# Keep it there; `node bin/apc.js version sync` verifies this stays aligned.
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _apc_pkg_json)
-string(REGEX MATCH "\"version\"[ \t\r\n]*:[ \t\r\n]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _apc_ver_match "${_apc_pkg_json}")
-if(CMAKE_MATCH_1)
-    set(APC_VERSION "${CMAKE_MATCH_1}")
-else()
-    message(WARNING "Could not parse version from package.json; falling back to 1.5.0")
-    set(APC_VERSION "1.5.0")
-endif()
-project(APC_System VERSION ${APC_VERSION} LANGUAGES C CXX)
-message(STATUS "APC version: ${APC_VERSION} (from package.json)")
-set(CMAKE_CXX_STANDARD 20)
+project(JoweMutantFX VERSION 1.0.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# ============================================
-# OPTIONAL FEATURES
-# ============================================
-option(APC_ENABLE_VISAGE "Enable Visage UI framework support" OFF)
-option(APC_ENABLE_CLAP "Enable CLAP plugin format via clap-juce-extensions" ON)
-
-# ============================================
-# PLATFORM DETECTION
-# ============================================
-if(WIN32)
-    set(APC_PLATFORM "Windows")
-    set(APC_PLATFORM_WINDOWS TRUE)
-elseif(APPLE)
-    set(APC_PLATFORM "macOS")
-    set(APC_PLATFORM_MACOS TRUE)
-elseif(UNIX)
-    set(APC_PLATFORM "Linux")
-    set(APC_PLATFORM_LINUX TRUE)
-else()
-    set(APC_PLATFORM "Unknown")
-endif()
-
-message(STATUS "--- APC BUILD SYSTEM ---")
-message(STATUS "Platform: ${APC_PLATFORM}")
-message(STATUS "Root Directory: ${CMAKE_CURRENT_SOURCE_DIR}")
-
-# ============================================
-# GLOBAL DEFINITIONS (Platform-Specific)
-# ============================================
-if(APC_PLATFORM_WINDOWS)
-    # Windows-specific: WebView2
-    set(JUCE_USE_WIN_WEBVIEW2 ON CACHE BOOL "" FORCE)
-    add_definitions(-DJUCE_USE_WIN_WEBVIEW2=1)
-    message(STATUS "WebView2: Enabled")
-elseif(APC_PLATFORM_MACOS)
-    # macOS-specific: WKWebView (system framework)
-    set(JUCE_USE_WIN_WEBVIEW2 OFF CACHE BOOL "" FORCE)
-    message(STATUS "WebView: WKWebView (macOS)")
-elseif(APC_PLATFORM_LINUX)
-    # Linux-specific: WebKitGTK
-    set(JUCE_USE_WIN_WEBVIEW2 OFF CACHE BOOL "" FORCE)
-    message(STATUS "WebView: WebKitGTK (Linux)")
-endif()
-
-# ============================================
-# EXTERNAL TOOLS
-# ============================================
-set(JUCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_tools/JUCE")
-set(VISAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_tools/visage")
-set(CLAP_JUCE_EXTENSIONS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_tools/clap-juce-extensions")
-
-if(NOT EXISTS "${JUCE_DIR}")
-    message(FATAL_ERROR "JUCE missing at ${JUCE_DIR}")
-endif()
-add_subdirectory("${JUCE_DIR}")
-
-# Visage is only needed for Visage UI framework plugins
-if(APC_ENABLE_VISAGE)
-    if(NOT EXISTS "${VISAGE_DIR}")
-        message(FATAL_ERROR "Visage missing at ${VISAGE_DIR}")
-    endif()
-    add_subdirectory("${VISAGE_DIR}")
-    if(TARGET visage AND NOT TARGET visage::visage)
-        add_library(visage::visage ALIAS visage)
-    endif()
-endif()
-
-# clap-juce-extensions provides clap_juce_extensions_plugin(). Per-plugin
-# CMakeLists opt in via that call; a missing submodule must not break configure.
-if(APC_ENABLE_CLAP)
-    if(EXISTS "${CLAP_JUCE_EXTENSIONS_DIR}/CMakeLists.txt")
-        add_subdirectory("${CLAP_JUCE_EXTENSIONS_DIR}")
-        message(STATUS "CLAP: enabled (clap-juce-extensions)")
-    else()
-        message(STATUS "CLAP: requested but _tools/clap-juce-extensions is missing - skipping (git submodule update --init --recursive)")
-    endif()
-endif()
-
-# ============================================
-# PLUGIN / BUILD PATH OVERRIDES (apc.config.json)
-# ============================================
-# Prefer -DAPC_PLUGINS_DIR=... from the command line.
-# Otherwise read apc.config.json / apc.config.example.json when Python is available.
-if(NOT DEFINED APC_PLUGINS_DIR OR APC_PLUGINS_DIR STREQUAL "")
-    set(APC_PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
-    set(_apc_cfg "${CMAKE_CURRENT_SOURCE_DIR}/apc.config.json")
-    if(NOT EXISTS "${_apc_cfg}")
-        set(_apc_cfg "${CMAKE_CURRENT_SOURCE_DIR}/apc.config.example.json")
-    endif()
-    if(EXISTS "${_apc_cfg}")
-        find_package(Python3 COMPONENTS Interpreter QUIET)
-        if(Python3_Interpreter_FOUND)
-            execute_process(
-                COMMAND "${Python3_EXECUTABLE}" -c
-                    "import json, pathlib, sys; p=pathlib.Path(sys.argv[1]); d=json.loads(p.read_text(encoding='utf-8-sig')); print(d.get('paths',{}).get('plugins_dir','plugins'))"
-                    "${_apc_cfg}"
-                OUTPUT_VARIABLE _apc_plugins_rel
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET
-            )
-            if(_apc_plugins_rel)
-                if(IS_ABSOLUTE "${_apc_plugins_rel}")
-                    set(APC_PLUGINS_DIR "${_apc_plugins_rel}")
-                else()
-                    set(APC_PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${_apc_plugins_rel}")
-                endif()
-            endif()
-        endif()
-    endif()
-endif()
-
-# ============================================
-# PLUGIN DISCOVERY
-# ============================================
-message(STATUS "Scanning for plugins in: ${APC_PLUGINS_DIR}")
-
-file(GLOB PLUGIN_DIRS "${APC_PLUGINS_DIR}/*")
-
-set(APC_PLUGIN_COUNT 0)
-
-foreach(PLUGIN_DIR ${PLUGIN_DIRS})
-    get_filename_component(DIR_NAME ${PLUGIN_DIR} NAME)
-    
-    if(IS_DIRECTORY "${PLUGIN_DIR}")
-        if(EXISTS "${PLUGIN_DIR}/CMakeLists.txt")
-            message(STATUS " -> FOUND: ${DIR_NAME}")
-            add_subdirectory("${PLUGIN_DIR}" "${CMAKE_BINARY_DIR}/plugins/${DIR_NAME}")
-            math(EXPR APC_PLUGIN_COUNT "${APC_PLUGIN_COUNT} + 1")
-        else()
-            message(STATUS " -> SKIPPING: ${DIR_NAME} (No CMakeLists.txt)")
-        endif()
-    endif()
-endforeach()
-
-message(STATUS "Total plugins found: ${APC_PLUGIN_COUNT}")
-message(STATUS "--- END ---")
+include(FetchContent)
+FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git GIT_TAG 8.0.10 GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(JUCE)
+juce_add_plugin(JoweMutantFX
+ COMPANY_NAME "Jowe Beats"
+ BUNDLE_ID "com.jowebeats.mutantfx"
+ PLUGIN_MANUFACTURER_CODE Jowe
+ PLUGIN_CODE Jmfx
+ FORMATS VST3
+ PRODUCT_NAME "JOWE MUTANT FX"
+ IS_SYNTH FALSE
+ NEEDS_MIDI_INPUT FALSE
+ NEEDS_MIDI_OUTPUT FALSE
+ IS_MIDI_EFFECT FALSE
+ COPY_PLUGIN_AFTER_BUILD FALSE)
+juce_generate_juce_header(JoweMutantFX)
+target_sources(JoweMutantFX PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
+target_compile_definitions(JoweMutantFX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+target_link_libraries(JoweMutantFX PRIVATE juce::juce_audio_utils juce::juce_dsp juce::juce_gui_extra juce::juce_recommended_config_flags juce::juce_recommended_warning_flags juce::juce_recommended_lto_flags)
