@@ -117,4 +117,8 @@ void JoweMutantFXAudioProcessor::setStateInformation(const void* data, int size)
     if (auto xml = getXmlFromBinary(data, size))
         if (xml->hasTagName(apvts.state.getType())) apvts.replaceState(juce::ValueTree::fromXml(*xml));
 }
+juce::AudioProcessorEditor* JoweMutantFXAudioProcessor::createEditor()
+{
+    return new JoweMutantFXAudioProcessorEditor(*this);
+}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new JoweMutantFXAudioProcessor(); }
